@@ -140,39 +140,4 @@
     map.on('click', onMapClick);
 </script>
 </body>
-</html>                 message = "You are near the **center of the world**, close to the Equator and Prime Meridian. A true global start!";
-            } else {
-                 message = `Your location is at ${latAbs}° ${latDir} and ${lngAbs}° ${lngDir}. A clue for your journey!`;
-            }
-
-            return `Pin dropped at: (Lat: ${latAbs}°, Lng: ${lngAbs}°). ${message}`;
-        }
-
-        // Handle the map click event
-        function onMapClick(e) {
-            const lat = e.latlng.lat;
-            const lng = e.latlng.lng;
-
-            // 1. Remove the existing marker if one is present
-            if (currentMarker) {
-                map.removeLayer(currentMarker);
-            }
-
-            // 2. Create and add a new marker at the clicked location
-            currentMarker = L.marker([lat, lng]).addTo(map);
-
-            // 3. Generate the clue
-            const clue = generateClue(lat, lng);
-
-            // 4. Update the clue display box
-            document.getElementById('clueOutput').innerHTML = clue;
-
-            // 5. Open a popup bubble on the marker with a mini-clue
-            currentMarker.bindPopup(`**Your Clue:** ${clue}`).openPopup();
-        }
-
-        // Attach the click event listener to the map
-        map.on('click', onMapClick);
-    </script>
-</body>
 </html>
