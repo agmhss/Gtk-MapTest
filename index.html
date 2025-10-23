@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Map Clue Utility</title>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/SJPMe+xBSw4/EE7pLpT8fGz0Y/76U5p/M4B2tO+I"
+        crossorigin=""/>
+
+    <style>
+        /* Define the map container size */
+        #map {
+            height: 600px;
+            width: 90%;
+            max-width: 800px;
+            margin: 20px auto;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            background-color: #f4f4f9;
+        }
+
+        h1 {
+            color: #333;
+            margin-top: 30px;
+        }
+
+        .clue-box {
+            background-color: #fff;
+            padding: 15px;
+            border-radius: 8px;
+            border: 2px solid #0078A8; /* Leaflet blue */
+            width: 90%;
+            max-width: 800px;
+            margin: 0 auto 20px;
+            text-align: left;
+        }
+
+        .clue-box p {
+            font-size: 1.1em;
+            color: #555;
+            margin: 5px 0;
+        }
+
+        .clue-box strong {
+            color: #CC0000; /* Red for emphasis */
+        }
+    </style>
+</head>
+<body>
+
+    <h1>🌎 Drop a Pin, Get a Clue!</h1>
+    <div id="instruction">Click anywhere on the map to drop a pin and reveal a location clue.</div>
+
+    <div id="map"></div>
+
+    <div class="clue-box">
+        <p><strong>Clue Result:</strong> <span id="clueOutput">Click on the map to begin your search!</span></p>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20n6Rz80W6O9B806u8F4h/3D7W9u0E9x5fQG3X0H3D/76U5p/M4B2tO+I"
+        crossorigin=""></script>
+
+    <script>
+        // --- JAVASCRIPT LOGIC ---
+
+        // Initialize the map and set its view to a general world view
+        // [0, 0] is the center of the world, 2 is a low zoom level
+        const map = L.map('map').setView([0, 0], 2);
+
+        // Add the standard OpenStreetMap tiles to the map
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Variable to hold the single, temporary marker
+        let currentMarker = null;
+
+        // Function to generate a location clue based on coordinates
+        function generateClue(lat, lng) {
+            const latDir = lat >= 0 ? 'North' : 'South';
+            const lngDir = lng >= 0 ? 'East' : 'West';
+            const latAbs = Math.abs(lat).toFixed(2);
+            const lngAbs = Math.abs(lng).toFixed(2);
+
+            let message = "";
+
+            if (lat > 50 && lng < -100) {
+                message = "You are far in the **Northwest**, perhaps near the icy wilderness of Alaska or Canada!";
+            } else if (lat > 35 && lng > -10 && lng < 40) {
+                 message = "Your pin drops in the **Northern Hemisphere**, close to the classic landscapes of Europe.";
+            } else if (lat < -10 && lng > 100) {
+                 message = "A warm location! You're in the **Southeast**, potentially near Australia or the islands of Oceania.";
+            } else if (lat < -40 && lng < -50) {
+                 message = "Brrr! This is the far **Southwest**, possibly near the frigid southern tip of South America.";
+            } else if (Math.abs(lat) < 5 && Math.abs(lng) < 5) {
+                 message = "You are near the **center of the world**, close to the Equator and Prime Meridian. A true global start!";
+            } else {
+                 message = `Your location is at ${latAbs}° ${latDir} and ${lngAbs}° ${lngDir}. A clue for your journey!`;
+            }
+
+            return `Pin dropped at: (Lat: ${latAbs}°, Lng: ${lngAbs}°). ${message}`;
+        }
+
+        // Handle the map click event
+        function onMapClick(e) {
+            const lat = e.latlng.lat;
+            const lng = e.latlng.lng;
+
+            // 1. Remove the existing marker if one is present
+            if (currentMarker) {
+                map.removeLayer(currentMarker);
+            }
+
+            // 2. Create and add a new marker at the clicked location
+            currentMarker = L.marker([lat, lng]).addTo(map);
+
+            // 3. Generate the clue
+            const clue = generateClue(lat, lng);
+
+            // 4. Update the clue display box
+            document.getElementById('clueOutput').innerHTML = clue;
+
+            // 5. Open a popup bubble on the marker with a mini-clue
+            currentMarker.bindPopup(`**Your Clue:** ${clue}`).openPopup();
+        }
+
+        // Attach the click event listener to the map
+        map.on('click', onMapClick);
+    </script>
+</body>
+</html>
