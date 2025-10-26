@@ -3,23 +3,61 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>🌎 Interactive Map Test</title>
+  <title>Drop the Pin – Map Quiz 🌍</title>
 
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
 
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
-      background-color: #f2f7fa;
       text-align: center;
+      background: #eaf3fa;
       margin: 0;
       padding: 0;
     }
+
     h1 {
-      color: #2c3e50;
+      color: #1b3b5f;
       margin: 20px 0 10px;
+      font-size: 1.8em;
     }
+
+    .controls {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      width: 90%;
+      max-width: 500px;
+      margin: 10px auto;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.15);
+    }
+
+    select,
+    input {
+      padding: 6px 10px;
+      font-size: 1em;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      margin: 5px;
+    }
+
+    button {
+      padding: 8px 15px;
+      background: #0078a8;
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #005f85;
+    }
+
     #map {
       height: 60vh;
       width: 90%;
@@ -28,218 +66,188 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
-    #setup, #quiz-box, #hallOfFame {
+
+    .info-box {
       background: #fff;
+      border: 2px solid #0078a8;
       border-radius: 10px;
       padding: 15px;
       width: 90%;
       max-width: 900px;
-      margin: 10px auto;
-      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
+      margin: 15px auto;
+      text-align: left;
     }
-    select, input, button {
-      padding: 8px;
-      margin: 5px;
-      border-radius: 6px;
-      border: 1px solid #ccc;
-      font-size: 1em;
-    }
-    #scoreBox {
+
+    .score {
       font-weight: bold;
       color: #0078a8;
-      margin-top: 5px;
+      font-size: 1.1em;
     }
-    #loading {
-      color: #ff6600;
+
+    .error {
+      color: #d9534f;
       font-weight: bold;
       margin-top: 10px;
+    }
+
+    @media (max-width: 600px) {
+      #map {
+        height: 55vh;
+      }
     }
   </style>
 </head>
 <body>
   <h1>🗺️ Drop the Pin – Map Quiz</h1>
 
-  <div id="setup">
+  <div class="controls">
     <p>Choose map type and country to start:</p>
-    <label>Map Type:
-      <select id="mapType">
-        <option value="osm">Physical</option>
-        <option value="political">Political</option>
-        <option value="rivers">Rivers</option>
-      </select>
-    </label>
-    <label>Country:
-      <input type="text" id="country" placeholder="e.g. India" />
-    </label>
-    <button id="startBtn">Start Test</button>
-    <div id="loading"></div>
+    <label>Map Type:</label>
+    <select id="mapType">
+      <option value="osm">Physical</option>
+      <option value="political">Political</option>
+      <option value="rivers">Rivers</option>
+    </select>
+    <label>Country:</label>
+    <input type="text" id="countryInput" placeholder="e.g. India" />
+    <button onclick="startTest()">Start Test</button>
+    <p id="errorMsg" class="error"></p>
   </div>
 
   <div id="map"></div>
 
-  <div id="quiz-box" style="display:none;">
-    <p id="questionText">Question appears here</p>
-    <div id="scoreBox">Score: 0 / 0</div>
+  <div class="info-box">
+    <p><b>Question:</b> <span id="questionText">–</span></p>
+    <p class="score">Score: <span id="score">0</span> / 10</p>
   </div>
 
-  <div id="hallOfFame" style="display:none;">
-    <h3>🏆 Hall of Fame</h3>
-    <p>Enter your name:</p>
-    <input id="playerName" placeholder="Your name" />
-    <button id="saveNameBtn">Save</button>
-    <div id="hofList"></div>
-  </div>
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <script>
-let map, marker = null, score = 0, questionIndex = 0;
-const totalQuestions = 10;
-let questions = [];
+    let map, currentMarker;
+    let cities = [];
+    let currentQuestion = 0;
+    let score = 0;
+    const totalQuestions = 10;
 
-// Haversine formula (km)
-function getDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371;
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) *
-      Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
+    function setMap(mapType) {
+      let tileUrl;
+      if (mapType === "osm") {
+        tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      } else if (mapType === "political") {
+        tileUrl = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+      } else {
+        tileUrl = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+      }
 
-function initMap(mapType) {
-  if (map) map.remove();
-  map = L.map("map").setView([20, 0], 2);
+      map = L.map("map").setView([20, 78], 5);
+      L.tileLayer(tileUrl, {
+        maxZoom: 18,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
 
-  let tileUrl;
-  if (mapType === "osm") {
-    tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-  } else if (mapType === "political") {
-    tileUrl = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-  } else {
-    tileUrl = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
-  }
-
-  L.tileLayer(tileUrl, {
-    maxZoom: 18,
-    attribution: '&copy; OpenStreetMap contributors',
-  }).addTo(map);
-
-  map.on("click", handleMapClick);
-}
-
-// ✅ Improved city fetch with fallback
-async function fetchCities(country) {
-  try {
-    const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
-      country
-    )}&q=city&format=json&limit=100`;
-    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
-    const data = await res.json();
-
-    if (!data.length) throw new Error("No cities found");
-    const unique = [
-      ...new Map(data.map((i) => [i.display_name, i])).values(),
-    ];
-    return unique
-      .sort(() => 0.5 - Math.random())
-      .slice(0, totalQuestions)
-      .map((d) => ({
-        name: d.display_name.split(",")[0],
-        lat: +d.lat,
-        lng: +d.lon,
-      }));
-  } catch (err) {
-    // 🔁 Fallback to built-in list if API fails
-    if (country.toLowerCase() === "india") {
-      return [
-        { name: "New Delhi", lat: 28.6139, lng: 77.2090 },
-        { name: "Mumbai", lat: 19.0760, lng: 72.8777 },
-        { name: "Kolkata", lat: 22.5726, lng: 88.3639 },
-        { name: "Chennai", lat: 13.0827, lng: 80.2707 },
-        { name: "Bengaluru", lat: 12.9716, lng: 77.5946 },
-        { name: "Hyderabad", lat: 17.3850, lng: 78.4867 },
-        { name: "Jaipur", lat: 26.9124, lng: 75.7873 },
-        { name: "Ahmedabad", lat: 23.0225, lng: 72.5714 },
-        { name: "Lucknow", lat: 26.8467, lng: 80.9462 },
-        { name: "Pune", lat: 18.5204, lng: 73.8567 },
-      ];
+      map.on("click", handleMapClick);
     }
-    throw err;
-  }
-}
 
-async function startTest() {
-  const mapType = document.getElementById("mapType").value;
-  const country = document.getElementById("country").value.trim();
-  if (!country) return alert("Please enter a country!");
-  document.getElementById("loading").textContent = "🌍 Loading cities...";
+    async function fetchCities(country) {
+      try {
+        const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
+          country
+        )}&q=city&format=json&limit=100`;
 
-  try {
-    questions = await fetchCities(country);
-    document.getElementById("loading").textContent = "";
-    document.getElementById("setup").style.display = "none";
-    document.getElementById("quiz-box").style.display = "block";
-    initMap(mapType);
-    loadQuestion();
-  } catch (err) {
-    document.getElementById("loading").textContent =
-      "⚠️ Couldn't load that country. Try again.";
-  }
-}
+        // ✅ Use proxy to bypass CORS restrictions
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const res = await fetch(proxyUrl, { headers: { "Accept-Language": "en" } });
+        const data = await res.json();
 
-function loadQuestion() {
-  if (questionIndex >= totalQuestions) {
-    endTest();
-    return;
-  }
-  const q = questions[questionIndex];
-  document.getElementById("questionText").innerHTML = `Locate: <b>${q.name}</b>`;
-  document.getElementById("scoreBox").textContent = `Score: ${score} / ${questionIndex}`;
-  if (marker) {
-    map.removeLayer(marker);
-    marker = null;
-  }
-  map.setView([q.lat, q.lng], 4);
-}
+        if (!data.length) throw new Error("No cities found");
 
-function handleMapClick(e) {
-  const q = questions[questionIndex];
-  const { lat, lng } = e.latlng;
+        const unique = [...new Map(data.map((i) => [i.display_name, i])).values()];
+        return unique.sort(() => 0.5 - Math.random()).slice(0, totalQuestions);
+      } catch (err) {
+        document.getElementById("errorMsg").innerText =
+          "⚠️ Couldn't load that country. Try another.";
+        console.error(err);
+        return [];
+      }
+    }
 
-  if (marker) map.removeLayer(marker);
-  marker = L.marker([lat, lng]).addTo(map);
+    async function startTest() {
+      document.getElementById("errorMsg").innerText = "";
+      const mapType = document.getElementById("mapType").value;
+      const country = document.getElementById("countryInput").value.trim();
 
-  const distance = getDistance(lat, lng, q.lat, q.lng);
-  if (distance <= 30) {
-    alert(`✅ Correct! You’re within ${distance.toFixed(1)} km of ${q.name}.`);
-    score++;
-  } else {
-    alert(`❌ Missed! You’re ${distance.toFixed(1)} km away from ${q.name}.`);
-  }
+      if (!country) {
+        document.getElementById("errorMsg").innerText = "Please enter a country name.";
+        return;
+      }
 
-  questionIndex++;
-  loadQuestion();
-}
+      if (map) map.remove(); // clear old map
+      setMap(mapType);
 
-function endTest() {
-  document.getElementById("quiz-box").style.display = "none";
-  document.getElementById("hallOfFame").style.display = "block";
-  document.getElementById("scoreBox").textContent = `Final Score: ${score} / ${totalQuestions}`;
-}
+      cities = await fetchCities(country);
 
-document.getElementById("saveNameBtn").addEventListener("click", () => {
-  const name = document.getElementById("playerName").value.trim();
-  if (!name) return alert("Enter your name!");
-  const listDiv = document.getElementById("hofList");
-  const entry = document.createElement("p");
-  entry.textContent = `${name} — ${score} / ${totalQuestions}`;
-  listDiv.appendChild(entry);
-  document.getElementById("playerName").value = "";
-});
+      if (!cities.length) return;
 
-document.getElementById("startBtn").addEventListener("click", startTest);
-      </script>
+      currentQuestion = 0;
+      score = 0;
+      document.getElementById("score").innerText = score;
+      nextQuestion();
+    }
+
+    function nextQuestion() {
+      if (currentQuestion >= totalQuestions) {
+        const playerName = prompt("🎉 Quiz complete! Enter your name for the Hall of Fame:");
+        alert(`Great job, ${playerName || "Explorer"}! Final Score: ${score}/${totalQuestions}`);
+        return;
+      }
+
+      const city = cities[currentQuestion];
+      document.getElementById("questionText").innerText = `Locate ${city.display_name}`;
+    }
+
+    function handleMapClick(e) {
+      if (!cities.length) return;
+
+      const { lat, lon } = cities[currentQuestion];
+      const targetLat = parseFloat(lat);
+      const targetLon = parseFloat(lon);
+
+      const clickedLat = e.latlng.lat;
+      const clickedLon = e.latlng.lng;
+
+      const dist = distance(clickedLat, clickedLon, targetLat, targetLon);
+      const tolerance = 30; // km radius tolerance
+
+      if (currentMarker) map.removeLayer(currentMarker);
+      currentMarker = L.marker([clickedLat, clickedLon]).addTo(map);
+
+      if (dist <= tolerance) {
+        score++;
+        alert(`✅ Correct! You were ${dist.toFixed(1)} km away.`);
+      } else {
+        alert(`❌ Wrong! You were ${dist.toFixed(1)} km away.`);
+      }
+
+      document.getElementById("score").innerText = score;
+      currentQuestion++;
+      nextQuestion();
+    }
+
+    // Haversine formula for distance between two coordinates in km
+    function distance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+          Math.cos((lat2 * Math.PI) / 180) *
+          Math.sin(dLon / 2) *
+          Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+  </script>
 </body>
-</html>
+  </html>
