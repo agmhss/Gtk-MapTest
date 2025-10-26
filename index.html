@@ -3,35 +3,23 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Map Clue Utility 🌎</title>
+  <title>🌎 Interactive Map Test</title>
 
-  <!-- Leaflet CSS -->
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <style>
     body {
       font-family: "Segoe UI", Arial, sans-serif;
+      background-color: #f2f7fa;
       text-align: center;
-      background-color: #f7f9fc;
       margin: 0;
       padding: 0;
     }
-
     h1 {
       color: #2c3e50;
       margin: 20px 0 10px;
-      font-size: 1.8em;
     }
-
-    #instruction {
-      margin-bottom: 10px;
-      color: #555;
-      font-size: 1em;
-    }
-
     #map {
       height: 60vh;
       width: 90%;
@@ -40,133 +28,182 @@
       border-radius: 12px;
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
     }
-
-    .clue-box {
+    #setup, #quiz-box, #hallOfFame {
       background: #fff;
-      border: 2px solid #0078a8;
       border-radius: 10px;
       padding: 15px;
-      margin: 10px auto 25px;
       width: 90%;
       max-width: 900px;
-      text-align: left;
-      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      margin: 10px auto;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.1);
     }
-
-    .clue-box p {
-      font-size: 1.1em;
-      color: #333;
+    select, input, button {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 1em;
     }
-
-    @media (max-width: 600px) {
-      #map {
-        height: 50vh;
-      }
-      h1 {
-        font-size: 1.4em;
-      }
+    #scoreBox {
+      font-weight: bold;
+      color: #0078a8;
+      margin-top: 5px;
+    }
+    #loading {
+      color: #ff6600;
+      font-weight: bold;
+      margin-top: 10px;
     }
   </style>
 </head>
 <body>
-  <h1>🌎 Drop a Pin, Get a Smart Clue!</h1>
-  <div id="instruction">
-    Tap or click anywhere on the map to drop a pin and reveal a smart clue about
-    the place!
+  <h1>🗺️ Drop the Pin – Map Quiz</h1>
+
+  <div id="setup">
+    <p>Choose map type and country to start:</p>
+    <label>Map Type:
+      <select id="mapType">
+        <option value="osm">Physical</option>
+        <option value="political">Political</option>
+        <option value="rivers">Rivers</option>
+      </select>
+    </label>
+    <label>Country:
+      <input type="text" id="country" placeholder="e.g. India" />
+    </label>
+    <button id="startBtn">Start Test</button>
+    <div id="loading"></div>
   </div>
+
   <div id="map"></div>
 
-  <div class="clue-box">
-    <p>
-      <b>Clue Result:</b>
-      <span id="clueOutput">Click on the map to begin your adventure!</span>
-    </p>
+  <div id="quiz-box" style="display:none;">
+    <p id="questionText">Question appears here</p>
+    <div id="scoreBox">Score: 0 / 0</div>
   </div>
 
-  <!-- Leaflet JS -->
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <div id="hallOfFame" style="display:none;">
+    <h3>🏆 Hall of Fame</h3>
+    <p>Enter your name:</p>
+    <input id="playerName" placeholder="Your name" />
+    <button id="saveNameBtn">Save</button>
+    <div id="hofList"></div>
+  </div>
 
   <script>
-    const map = L.map("map").setView([0, 0], 2);
+    let map, marker = null, score = 0, questionIndex = 0;
+    const totalQuestions = 10;
+    let questions = [];
 
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 18,
-      attribution:
-        '&copy; <a href="https://www.openstreetmap.org/">OpenStreetMap</a> contributors',
-    }).addTo(map);
-
-    let currentMarker = null;
-
-    function generateClue(lat, lng, placeInfo) {
-      const latDir = lat >= 0 ? "North" : "South";
-      const lngDir = lng >= 0 ? "East" : "West";
-      const latAbs = Math.abs(lat).toFixed(2);
-      const lngAbs = Math.abs(lng).toFixed(2);
-
-      let regionHint = "";
-
-      if (lat > 50 && lng < -100) {
-        regionHint = "the cold wilderness of <b>North America</b>.";
-      } else if (lat > 35 && lng > -10 && lng < 40) {
-        regionHint = "the historic lands of <b>Europe</b>.";
-      } else if (lat < -10 && lng > 100) {
-        regionHint = "the sunny beaches of <b>Australia</b> or Oceania.";
-      } else if (lat < -40 && lng < -50) {
-        regionHint = "the chilly edges of <b>South America</b>.";
-      } else if (Math.abs(lat) < 5 && Math.abs(lng) < 5) {
-        regionHint = "the <b>Center of the World</b> near the Equator!";
-      } else {
-        regionHint = "a fascinating part of our planet.";
-      }
-
-      const placeText = placeInfo
-        ? `<br><b>Nearest Place:</b> ${placeInfo}`
-        : "";
-
-      return `Pin dropped at (${latAbs}° ${latDir}, ${lngAbs}° ${lngDir}). You’re near ${regionHint}${placeText}`;
+    // Haversine formula to calculate distance (km)
+    function getDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat/2)**2 +
+                Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
+                Math.sin(dLon/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
-    async function onMapClick(e) {
+    function initMap(mapType) {
+      if (map) map.remove();
+      map = L.map("map").setView([20, 0], 2);
+
+      let tileUrl;
+      if (mapType === "osm") {
+        tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+      } else if (mapType === "political") {
+        tileUrl = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+      } else {
+        tileUrl = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+      }
+
+      L.tileLayer(tileUrl, {
+        maxZoom: 18,
+        attribution: '&copy; OpenStreetMap contributors'
+      }).addTo(map);
+
+      map.on("click", handleMapClick);
+    }
+
+    async function fetchCities(country) {
+      const url = `https://nominatim.openstreetmap.org/search?country=${country}&city=&format=json&limit=100`;
+      const res = await fetch(url);
+      const data = await res.json();
+      // Filter to only unique cities and pick 10 random
+      const unique = [...new Map(data.map(i => [i.display_name, i])).values()];
+      return unique.sort(() => 0.5 - Math.random()).slice(0, totalQuestions)
+                   .map(d => ({ name: d.display_name.split(",")[0], lat: +d.lat, lng: +d.lon }));
+    }
+
+    async function startTest() {
+      const mapType = document.getElementById("mapType").value;
+      const country = document.getElementById("country").value.trim();
+      if (!country) return alert("Please enter a country!");
+      document.getElementById("loading").textContent = "🌍 Loading cities...";
+      
+      try {
+        questions = await fetchCities(country);
+        if (questions.length < 5) throw new Error("Not enough city data found!");
+        document.getElementById("loading").textContent = "";
+        document.getElementById("setup").style.display = "none";
+        document.getElementById("quiz-box").style.display = "block";
+        initMap(mapType);
+        loadQuestion();
+      } catch (err) {
+        document.getElementById("loading").textContent = "⚠️ Couldn't load that country. Try another.";
+      }
+    }
+
+    function loadQuestion() {
+      if (questionIndex >= totalQuestions) {
+        endTest();
+        return;
+      }
+      const q = questions[questionIndex];
+      document.getElementById("questionText").innerHTML = `Locate: <b>${q.name}</b>`;
+      document.getElementById("scoreBox").textContent = `Score: ${score} / ${questionIndex}`;
+      if (marker) { map.removeLayer(marker); marker = null; }
+      map.setView([q.lat, q.lng], 4);
+    }
+
+    function handleMapClick(e) {
+      const q = questions[questionIndex];
       const { lat, lng } = e.latlng;
 
-      // Remove old marker
-      if (currentMarker) map.removeLayer(currentMarker);
+      if (marker) map.removeLayer(marker);
+      marker = L.marker([lat, lng]).addTo(map);
 
-      // Add new marker
-      currentMarker = L.marker([lat, lng]).addTo(map);
-
-      // Fetch reverse geocoded location
-      document.getElementById("clueOutput").innerHTML =
-        "🔍 Finding nearby place...";
-
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json`
-        );
-        const data = await response.json();
-
-        let placeInfo = "";
-        if (data.address) {
-          const { city, town, village, state, country } = data.address;
-          placeInfo =
-            city || town || village
-              ? `${city || town || village}, ${state || ""}, ${country || ""}`
-              : `${state || ""}, ${country || ""}`;
-        }
-
-        const clue = generateClue(lat, lng, placeInfo);
-        document.getElementById("clueOutput").innerHTML = clue;
-
-        currentMarker
-          .bindPopup(`<b>Your Clue:</b><br>${clue}`)
-          .openPopup();
-      } catch (error) {
-        document.getElementById("clueOutput").innerHTML =
-          "⚠️ Unable to fetch location details. Try again.";
+      const distance = getDistance(lat, lng, q.lat, q.lng);
+      if (distance <= 30) {
+        alert(`✅ Correct! You’re within ${distance.toFixed(1)} km of ${q.name}.`);
+        score++;
+      } else {
+        alert(`❌ Missed! You’re ${distance.toFixed(1)} km away from ${q.name}.`);
       }
+
+      questionIndex++;
+      loadQuestion();
     }
 
-    map.on("click", onMapClick);
+    function endTest() {
+      document.getElementById("quiz-box").style.display = "none";
+      document.getElementById("hallOfFame").style.display = "block";
+      document.getElementById("scoreBox").textContent = `Final Score: ${score} / ${totalQuestions}`;
+    }
+
+    document.getElementById("saveNameBtn").addEventListener("click", () => {
+      const name = document.getElementById("playerName").value.trim();
+      if (!name) return alert("Enter your name!");
+      const listDiv = document.getElementById("hofList");
+      const entry = document.createElement("p");
+      entry.textContent = `${name} — ${score} / ${totalQuestions}`;
+      listDiv.appendChild(entry);
+      document.getElementById("playerName").value = "";
+    });
+
+    document.getElementById("startBtn").addEventListener("click", startTest);
   </script>
 </body>
 </html>
