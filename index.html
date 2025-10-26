@@ -4,37 +4,31 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Locate the City 🌍 Quiz</title>
-  <link
-    rel="stylesheet"
-    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-  />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
     body {
       font-family: system-ui, sans-serif;
       text-align: center;
       background: #f5f5f5;
       margin: 0;
-      padding: 0;
     }
     h1 {
       background: #2196f3;
       color: white;
+      padding: 10px;
       margin: 0;
-      padding: 15px;
-      font-size: 1.4em;
     }
     #map {
       height: 70vh;
       width: 95%;
-      margin: 15px auto;
+      margin: 10px auto;
       border-radius: 10px;
     }
     input, button {
       padding: 10px;
-      margin: 5px;
       font-size: 1em;
       border-radius: 5px;
-      border: 1px solid #ccc;
+      margin: 5px;
     }
     button {
       background: #2196f3;
@@ -42,16 +36,19 @@
       border: none;
       cursor: pointer;
     }
-    button:hover {
-      background: #1976d2;
-    }
     #errorMsg {
       color: red;
+      font-weight: bold;
       margin-top: 8px;
     }
-    #scoreBox {
+    #loading {
+      color: #444;
       margin-top: 10px;
+      font-style: italic;
+    }
+    #scoreBox {
       font-weight: bold;
+      margin-top: 10px;
     }
   </style>
 </head>
@@ -61,14 +58,12 @@
   <div>
     <input type="text" id="countryInput" placeholder="Enter a country name (e.g., India)" />
     <button id="startBtn">Start Quiz</button>
+    <div id="loading"></div>
     <div id="errorMsg"></div>
   </div>
 
   <div id="map"></div>
-
-  <div id="scoreBox">
-    Score: <span id="score">0</span> / <span id="total">10</span>
-  </div>
+  <div id="scoreBox">Score: <span id="score">0</span> / 10</div>
 
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script>
@@ -85,44 +80,39 @@
       attribution: "&copy; OpenStreetMap contributors",
     }).addTo(map);
 
-    // Fetch cities with proxy and fallback
     async function fetchCities(country) {
+      const loading = document.getElementById("loading");
+      const errorMsg = document.getElementById("errorMsg");
+      loading.innerText = "🔄 Loading cities...";
+      errorMsg.innerText = "";
+
       try {
         const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
           country
         )}&city=&format=json&limit=100`;
-        const proxyUrl = `https://corsproxy.io/?${encodeURIComponent(url)}`;
+        const proxyUrl = `https://api.allorigins.win/get?url=${encodeURIComponent(url)}`;
 
-        let res = await fetch(proxyUrl, { headers: { "Accept-Language": "en" } });
-        let data = await res.json();
+        const res = await fetch(proxyUrl);
+        const dataObj = await res.json();
+        const data = JSON.parse(dataObj.contents);
 
-        if (!data.length) {
-          const backupUrl = `https://corsproxy.io/?${encodeURIComponent(
-            `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
-              country
-            )}&q=town&format=json&limit=100`
-          )}`;
-          res = await fetch(backupUrl, { headers: { "Accept-Language": "en" } });
-          data = await res.json();
-        }
-
-        if (!data.length) throw new Error("No cities found");
+        if (!data.length) throw new Error("No cities found.");
 
         const unique = [...new Map(data.map((i) => [i.display_name, i])).values()];
+        loading.innerText = "";
         return unique.sort(() => 0.5 - Math.random()).slice(0, totalQuestions);
       } catch (err) {
-        document.getElementById("errorMsg").innerText =
-          "⚠️ Couldn't load that country. Try another.";
-        console.error("City fetch error:", err);
+        loading.innerText = "";
+        errorMsg.innerText = "⚠️ Could not load that country. Try another.";
+        console.error(err);
         return [];
       }
     }
 
-    // Start quiz
     document.getElementById("startBtn").addEventListener("click", async () => {
       const country = document.getElementById("countryInput").value.trim();
       if (!country) return alert("Please enter a country name!");
-      document.getElementById("errorMsg").innerText = "";
+
       cities = await fetchCities(country);
       if (!cities.length) return;
       current = 0;
@@ -131,7 +121,6 @@
       nextQuestion();
     });
 
-    // Next question
     function nextQuestion() {
       if (current >= cities.length) {
         alert(`🏁 Quiz Over! Your score: ${score}/${cities.length}`);
@@ -149,12 +138,11 @@
       map.once("click", (e) => checkAnswer(e.latlng));
     }
 
-    // Check user’s answer
     function checkAnswer(userLatLng) {
       const cityLat = parseFloat(currentCity.lat);
       const cityLon = parseFloat(currentCity.lon);
 
-      const distance = map.distance(userLatLng, [cityLat, cityLon]) / 1000; // in km
+      const distance = map.distance(userLatLng, [cityLat, cityLon]) / 1000;
       if (distance <= 30) {
         alert(`✅ Correct! Within ${distance.toFixed(1)} km`);
         score++;
@@ -166,7 +154,10 @@
       current++;
 
       if (marker) map.removeLayer(marker);
-      marker = L.marker([cityLat, cityLon]).addTo(map).bindPopup(currentCity.display_name).openPopup();
+      marker = L.marker([cityLat, cityLon])
+        .addTo(map)
+        .bindPopup(currentCity.display_name)
+        .openPopup();
 
       setTimeout(nextQuestion, 1000);
     }
