@@ -91,119 +91,155 @@
   </div>
 
   <script>
-    let map, marker = null, score = 0, questionIndex = 0;
-    const totalQuestions = 10;
-    let questions = [];
+let map, marker = null, score = 0, questionIndex = 0;
+const totalQuestions = 10;
+let questions = [];
 
-    // Haversine formula to calculate distance (km)
-    function getDistance(lat1, lon1, lat2, lon2) {
-      const R = 6371;
-      const dLat = (lat2 - lat1) * Math.PI / 180;
-      const dLon = (lon2 - lon1) * Math.PI / 180;
-      const a = Math.sin(dLat/2)**2 +
-                Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) *
-                Math.sin(dLon/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+// Haversine formula (km)
+function getDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) *
+      Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+function initMap(mapType) {
+  if (map) map.remove();
+  map = L.map("map").setView([20, 0], 2);
+
+  let tileUrl;
+  if (mapType === "osm") {
+    tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
+  } else if (mapType === "political") {
+    tileUrl = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
+  } else {
+    tileUrl = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
+  }
+
+  L.tileLayer(tileUrl, {
+    maxZoom: 18,
+    attribution: '&copy; OpenStreetMap contributors',
+  }).addTo(map);
+
+  map.on("click", handleMapClick);
+}
+
+// ✅ Improved city fetch with fallback
+async function fetchCities(country) {
+  try {
+    const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
+      country
+    )}&q=city&format=json&limit=100`;
+    const res = await fetch(url, { headers: { "Accept-Language": "en" } });
+    const data = await res.json();
+
+    if (!data.length) throw new Error("No cities found");
+    const unique = [
+      ...new Map(data.map((i) => [i.display_name, i])).values(),
+    ];
+    return unique
+      .sort(() => 0.5 - Math.random())
+      .slice(0, totalQuestions)
+      .map((d) => ({
+        name: d.display_name.split(",")[0],
+        lat: +d.lat,
+        lng: +d.lon,
+      }));
+  } catch (err) {
+    // 🔁 Fallback to built-in list if API fails
+    if (country.toLowerCase() === "india") {
+      return [
+        { name: "New Delhi", lat: 28.6139, lng: 77.2090 },
+        { name: "Mumbai", lat: 19.0760, lng: 72.8777 },
+        { name: "Kolkata", lat: 22.5726, lng: 88.3639 },
+        { name: "Chennai", lat: 13.0827, lng: 80.2707 },
+        { name: "Bengaluru", lat: 12.9716, lng: 77.5946 },
+        { name: "Hyderabad", lat: 17.3850, lng: 78.4867 },
+        { name: "Jaipur", lat: 26.9124, lng: 75.7873 },
+        { name: "Ahmedabad", lat: 23.0225, lng: 72.5714 },
+        { name: "Lucknow", lat: 26.8467, lng: 80.9462 },
+        { name: "Pune", lat: 18.5204, lng: 73.8567 },
+      ];
     }
+    throw err;
+  }
+}
 
-    function initMap(mapType) {
-      if (map) map.remove();
-      map = L.map("map").setView([20, 0], 2);
+async function startTest() {
+  const mapType = document.getElementById("mapType").value;
+  const country = document.getElementById("country").value.trim();
+  if (!country) return alert("Please enter a country!");
+  document.getElementById("loading").textContent = "🌍 Loading cities...";
 
-      let tileUrl;
-      if (mapType === "osm") {
-        tileUrl = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-      } else if (mapType === "political") {
-        tileUrl = "https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png";
-      } else {
-        tileUrl = "https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png";
-      }
+  try {
+    questions = await fetchCities(country);
+    document.getElementById("loading").textContent = "";
+    document.getElementById("setup").style.display = "none";
+    document.getElementById("quiz-box").style.display = "block";
+    initMap(mapType);
+    loadQuestion();
+  } catch (err) {
+    document.getElementById("loading").textContent =
+      "⚠️ Couldn't load that country. Try again.";
+  }
+}
 
-      L.tileLayer(tileUrl, {
-        maxZoom: 18,
-        attribution: '&copy; OpenStreetMap contributors'
-      }).addTo(map);
+function loadQuestion() {
+  if (questionIndex >= totalQuestions) {
+    endTest();
+    return;
+  }
+  const q = questions[questionIndex];
+  document.getElementById("questionText").innerHTML = `Locate: <b>${q.name}</b>`;
+  document.getElementById("scoreBox").textContent = `Score: ${score} / ${questionIndex}`;
+  if (marker) {
+    map.removeLayer(marker);
+    marker = null;
+  }
+  map.setView([q.lat, q.lng], 4);
+}
 
-      map.on("click", handleMapClick);
-    }
+function handleMapClick(e) {
+  const q = questions[questionIndex];
+  const { lat, lng } = e.latlng;
 
-    async function fetchCities(country) {
-      const url = `https://nominatim.openstreetmap.org/search?country=${country}&city=&format=json&limit=100`;
-      const res = await fetch(url);
-      const data = await res.json();
-      // Filter to only unique cities and pick 10 random
-      const unique = [...new Map(data.map(i => [i.display_name, i])).values()];
-      return unique.sort(() => 0.5 - Math.random()).slice(0, totalQuestions)
-                   .map(d => ({ name: d.display_name.split(",")[0], lat: +d.lat, lng: +d.lon }));
-    }
+  if (marker) map.removeLayer(marker);
+  marker = L.marker([lat, lng]).addTo(map);
 
-    async function startTest() {
-      const mapType = document.getElementById("mapType").value;
-      const country = document.getElementById("country").value.trim();
-      if (!country) return alert("Please enter a country!");
-      document.getElementById("loading").textContent = "🌍 Loading cities...";
-      
-      try {
-        questions = await fetchCities(country);
-        if (questions.length < 5) throw new Error("Not enough city data found!");
-        document.getElementById("loading").textContent = "";
-        document.getElementById("setup").style.display = "none";
-        document.getElementById("quiz-box").style.display = "block";
-        initMap(mapType);
-        loadQuestion();
-      } catch (err) {
-        document.getElementById("loading").textContent = "⚠️ Couldn't load that country. Try another.";
-      }
-    }
+  const distance = getDistance(lat, lng, q.lat, q.lng);
+  if (distance <= 30) {
+    alert(`✅ Correct! You’re within ${distance.toFixed(1)} km of ${q.name}.`);
+    score++;
+  } else {
+    alert(`❌ Missed! You’re ${distance.toFixed(1)} km away from ${q.name}.`);
+  }
 
-    function loadQuestion() {
-      if (questionIndex >= totalQuestions) {
-        endTest();
-        return;
-      }
-      const q = questions[questionIndex];
-      document.getElementById("questionText").innerHTML = `Locate: <b>${q.name}</b>`;
-      document.getElementById("scoreBox").textContent = `Score: ${score} / ${questionIndex}`;
-      if (marker) { map.removeLayer(marker); marker = null; }
-      map.setView([q.lat, q.lng], 4);
-    }
+  questionIndex++;
+  loadQuestion();
+}
 
-    function handleMapClick(e) {
-      const q = questions[questionIndex];
-      const { lat, lng } = e.latlng;
+function endTest() {
+  document.getElementById("quiz-box").style.display = "none";
+  document.getElementById("hallOfFame").style.display = "block";
+  document.getElementById("scoreBox").textContent = `Final Score: ${score} / ${totalQuestions}`;
+}
 
-      if (marker) map.removeLayer(marker);
-      marker = L.marker([lat, lng]).addTo(map);
+document.getElementById("saveNameBtn").addEventListener("click", () => {
+  const name = document.getElementById("playerName").value.trim();
+  if (!name) return alert("Enter your name!");
+  const listDiv = document.getElementById("hofList");
+  const entry = document.createElement("p");
+  entry.textContent = `${name} — ${score} / ${totalQuestions}`;
+  listDiv.appendChild(entry);
+  document.getElementById("playerName").value = "";
+});
 
-      const distance = getDistance(lat, lng, q.lat, q.lng);
-      if (distance <= 30) {
-        alert(`✅ Correct! You’re within ${distance.toFixed(1)} km of ${q.name}.`);
-        score++;
-      } else {
-        alert(`❌ Missed! You’re ${distance.toFixed(1)} km away from ${q.name}.`);
-      }
-
-      questionIndex++;
-      loadQuestion();
-    }
-
-    function endTest() {
-      document.getElementById("quiz-box").style.display = "none";
-      document.getElementById("hallOfFame").style.display = "block";
-      document.getElementById("scoreBox").textContent = `Final Score: ${score} / ${totalQuestions}`;
-    }
-
-    document.getElementById("saveNameBtn").addEventListener("click", () => {
-      const name = document.getElementById("playerName").value.trim();
-      if (!name) return alert("Enter your name!");
-      const listDiv = document.getElementById("hofList");
-      const entry = document.createElement("p");
-      entry.textContent = `${name} — ${score} / ${totalQuestions}`;
-      listDiv.appendChild(entry);
-      document.getElementById("playerName").value = "";
-    });
-
-    document.getElementById("startBtn").addEventListener("click", startTest);
-  </script>
+document.getElementById("startBtn").addEventListener("click", startTest);
+      </script>
 </body>
 </html>
