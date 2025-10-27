@@ -7,7 +7,7 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   :root{
-    --blue:#2196f3; --bg:#f5f5f5; --card:#fff; --muted:#6b7280; --ok:#16a34a; --bad:#b91c1c;
+    --blue:#2196f3; --bg:#f5f5f5; --card:#fff; --muted:#6b7280;
   }
   html,body{height:100%;margin:0;background:var(--bg);font-family:system-ui,Segoe UI,Roboto,Arial,sans-serif;color:#111}
   header{background:var(--blue);color:#fff;padding:12px 10px;text-align:center;font-weight:700}
@@ -15,39 +15,39 @@
   .card{background:var(--card);border-radius:12px;box-shadow:0 4px 12px rgba(0,0,0,.08);padding:12px;margin-bottom:12px}
   .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
   label{font-weight:600}
-  select{padding:9px;border:1px solid #d1d5db;border-radius:8px}
   button{background:var(--blue);color:#fff;border:0;border-radius:8px;padding:10px 14px;cursor:pointer}
   button:disabled{opacity:.6;cursor:not-allowed}
+  input[type="radio"]{transform:translateY(1px)}
   #mapWrap{position:relative}
   #map{height:68vh;width:100%;border-radius:12px}
-  #scoreBox{position:absolute;top:10px;right:10px;background:#0b1a;color:#fff;padding:8px 12px;border-radius:10px;display:none}
-  #scoreBox b{font-size:1.05rem}
-  #msg{margin-top:6px;color:var(--bad);font-weight:700;min-height:20px}
+  #scoreBox{position:absolute;top:10px;right:10px;background:rgba(0,0,0,.6);color:#fff;padding:8px 12px;border-radius:10px;display:none}
+  #scoreBox b{font-size:1.06rem}
+  #msg{margin-top:6px;color:#b91c1c;font-weight:700;min-height:20px}
   .muted{color:var(--muted)}
-  .pill{display:inline-block;background:#eef6ff;border:1px solid #dbeafe;color:#0b3;padding:6px 10px;border-radius:999px;font-weight:700}
   .hof-item{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px dashed #e5e7eb}
-  .center{text-align:center}
+  .pill{display:inline-block;background:#eef6ff;border:1px solid #dbeafe;padding:4px 8px;border-radius:999px;font-weight:700}
   @media (max-width:640px){ #map{height:62vh} }
 </style>
 </head>
 <body>
 <header>Locate India 🗺️ — Practice & Test</header>
 <main>
+
   <!-- Controls -->
   <section class="card">
     <div class="row">
       <div>
         <label>Language</label><br/>
-        <label><input type="radio" name="lang" value="en" checked> English</label>
+        <label><input type="radio" name="lang" value="en" checked /> English</label>
         &nbsp;&nbsp;
-        <label><input type="radio" name="lang" value="ta"> Tamil</label>
+        <label><input type="radio" name="lang" value="ta" /> Tamil</label>
       </div>
 
       <div>
         <label>Mode</label><br/>
-        <label><input type="radio" name="mode" value="practice" checked> Practice</label>
+        <label><input type="radio" name="mode" value="practice" checked /> Practice</label>
         &nbsp;&nbsp;
-        <label><input type="radio" name="mode" value="test"> Test</label>
+        <label><input type="radio" name="mode" value="test" /> Test</label>
       </div>
 
       <div>
@@ -55,7 +55,9 @@
       </div>
     </div>
     <div id="msg"></div>
-    <div class="muted">Practice: labels shown for all items (capitals + physical features). Test: labels hidden; you score for accurate clicks. Round = 10 items.</div>
+    <div class="muted">
+      Practice: labels are shown for the 10 sampled items. Test: labels are hidden; score appears at the top-right. Round = 10 items.
+    </div>
   </section>
 
   <!-- Map -->
@@ -67,152 +69,152 @@
   <!-- Hall of Fame -->
   <section class="card">
     <h3>🏆 Hall of Fame (Top 10 — Test mode only)</h3>
-    <div class="muted">Saved locally per Language (English/Tamil). Finish a Test to record your result.</div>
-    <div id="hofList" class="center" style="margin-top:10px">No entries yet.</div>
+    <div class="muted">Saved locally per Language. Finish a Test to record your result.</div>
+    <div id="hofList" style="margin-top:10px">No entries yet.</div>
   </section>
+
 </main>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 /* =========================
-   Map + Tiles
+   Map setup
    ========================= */
-const map = L.map("map").setView([22.8, 79.8], 4); // center over India
+const map = L.map("map", { zoomControl:true }).setView([22.8, 79.8], 4);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: "&copy; OpenStreetMap contributors",
+  maxZoom: 18
 }).addTo(map);
 
 /* =========================
-   Data (All 28 state capitals + major features)
-   kind: 'capital' | 'river' | 'range' | 'plateau' | 'plain' | 'desert' | 'delta' | 'coast' | 'sea' | 'region'
-   radiusKm: scoring radius in km (looser for large regions/features)
+   India data: 28 state capitals + major features
+   kind controls scoring radius fairness for larger regions
    ========================= */
 const itemsIN = [
-  // ---- State capitals (28) ----
-  { en:"Amaravati (Andhra Pradesh)", ta:"அமராவதி (ஆந்திரப் பிரதேசம்)", lat:16.5062, lon:80.6480, kind:'capital', radiusKm:60 },
-  { en:"Itanagar (Arunachal Pradesh)", ta:"இடாநகர் (அருணாச்சலப் பிரதேசம்)", lat:27.0844, lon:93.6053, kind:'capital', radiusKm:60 },
-  { en:"Dispur (Assam)", ta:"டிஸ்பூர் (அசாம்)", lat:26.1433, lon:91.7898, kind:'capital', radiusKm:60 },
-  { en:"Patna (Bihar)", ta:"பாட்னா (பீகார்)", lat:25.5941, lon:85.1376, kind:'capital', radiusKm:60 },
-  { en:"Raipur (Chhattisgarh)", ta:"ராய்பூர் (சத்தீஸ்கர்)", lat:21.2514, lon:81.6296, kind:'capital', radiusKm:60 },
-  { en:"Panaji (Goa)", ta:"பணாஜி (கோவா)", lat:15.4909, lon:73.8278, kind:'capital', radiusKm:50 },
-  { en:"Gandhinagar (Gujarat)", ta:"காந்திநகர் (குஜராத்)", lat:23.2156, lon:72.6369, kind:'capital', radiusKm:60 },
-  { en:"Chandigarh (Haryana)", ta:"சண்டிகர் (ஹரியானா)", lat:30.7333, lon:76.7794, kind:'capital', radiusKm:60 },
-  { en:"Shimla (Himachal Pradesh)", ta:"ஷிம்லா (இமாச்சலப் பிரதேசம்)", lat:31.1048, lon:77.1734, kind:'capital', radiusKm:60 },
-  { en:"Ranchi (Jharkhand)", ta:"ராஞ்சி (ஜார்கண்ட்)", lat:23.3441, lon:85.3096, kind:'capital', radiusKm:60 },
-  { en:"Bengaluru (Karnataka)", ta:"பெங்களூரு (கர்நாடகா)", lat:12.9716, lon:77.5946, kind:'capital', radiusKm:60 },
-  { en:"Thiruvananthapuram (Kerala)", ta:"திருவனந்தபுரம் (கேரளா)", lat:8.5241, lon:76.9366, kind:'capital', radiusKm:50 },
-  { en:"Bhopal (Madhya Pradesh)", ta:"போபால் (மத்தியப் பிரதேசம்)", lat:23.2599, lon:77.4126, kind:'capital', radiusKm:60 },
-  { en:"Mumbai (Maharashtra)", ta:"மும்பை (மகாராஷ்டிரா)", lat:19.0760, lon:72.8777, kind:'capital', radiusKm:50 },
-  { en:"Imphal (Manipur)", ta:"இம்பால் (மணிப்பூர்)", lat:24.8170, lon:93.9368, kind:'capital', radiusKm:60 },
-  { en:"Shillong (Meghalaya)", ta:"ஷில்லாங் (மேகாலயா)", lat:25.5788, lon:91.8933, kind:'capital', radiusKm:60 },
-  { en:"Aizawl (Mizoram)", ta:"ஐசால் (மிசோரம்)", lat:23.7271, lon:92.7176, kind:'capital', radiusKm:60 },
-  { en:"Kohima (Nagaland)", ta:"கொஹிமா (நாகாலாந்து)", lat:25.6751, lon:94.1086, kind:'capital', radiusKm:60 },
-  { en:"Bhubaneswar (Odisha)", ta:"புவனேஸ்வர் (ஒடிஸா)", lat:20.2961, lon:85.8245, kind:'capital', radiusKm:60 },
-  { en:"Chandigarh (Punjab)", ta:"சண்டிகர் (பஞ்சாப்)", lat:30.7333, lon:76.7794, kind:'capital', radiusKm:60 },
-  { en:"Jaipur (Rajasthan)", ta:"ஜெய்ப்பூர் (ராஜஸ்தான்)", lat:26.9124, lon:75.7873, kind:'capital', radiusKm:60 },
-  { en:"Gangtok (Sikkim)", ta:"காங்டாக் (சிக்கிம்)", lat:27.3389, lon:88.6065, kind:'capital', radiusKm:60 },
-  { en:"Chennai (Tamil Nadu)", ta:"சென்னை (தமிழ்நாடு)", lat:13.0827, lon:80.2707, kind:'capital', radiusKm:50 },
-  { en:"Hyderabad (Telangana)", ta:"ஹைதராபாத் (தெலங்கானா)", lat:17.3850, lon:78.4867, kind:'capital', radiusKm:60 },
-  { en:"Agartala (Tripura)", ta:"அகர்தலா (திரிபுரா)", lat:23.8315, lon:91.2868, kind:'capital', radiusKm:60 },
-  { en:"Lucknow (Uttar Pradesh)", ta:"லக்னோ (உத்தரப் பிரதேசம்)", lat:26.8467, lon:80.9462, kind:'capital', radiusKm:60 },
-  { en:"Dehradun (Uttarakhand)", ta:"தேராதூன் (உத்தரகாண்ட்)", lat:30.3165, lon:78.0322, kind:'capital', radiusKm:60 },
-  { en:"Kolkata (West Bengal)", ta:"கொல்கத்தா (மேற்கு வங்காளம்)", lat:22.5726, lon:88.3639, kind:'capital', radiusKm:60 },
+  // Capitals (28)
+  { en:"Amaravati (Andhra Pradesh)", ta:"அமராவதி (ஆந்திரப் பிரதேசம்)", lat:16.5062, lon:80.6480, kind:"capital", r:60 },
+  { en:"Itanagar (Arunachal Pradesh)", ta:"இடாநகர் (அருணாச்சலப் பிரதேசம்)", lat:27.0844, lon:93.6053, kind:"capital", r:60 },
+  { en:"Dispur (Assam)", ta:"டிஸ்பூர் (அசாம்)", lat:26.1433, lon:91.7898, kind:"capital", r:60 },
+  { en:"Patna (Bihar)", ta:"பாட்னா (பீகார்)", lat:25.5941, lon:85.1376, kind:"capital", r:60 },
+  { en:"Raipur (Chhattisgarh)", ta:"ராய்பூர் (சத்தீஸ்கர்)", lat:21.2514, lon:81.6296, kind:"capital", r:60 },
+  { en:"Panaji (Goa)", ta:"பணாஜி (கோவா)", lat:15.4909, lon:73.8278, kind:"capital", r:50 },
+  { en:"Gandhinagar (Gujarat)", ta:"காந்திநகர் (குஜராத்)", lat:23.2156, lon:72.6369, kind:"capital", r:60 },
+  { en:"Chandigarh (Haryana)", ta:"சண்டிகர் (ஹரியானா)", lat:30.7333, lon:76.7794, kind:"capital", r:60 },
+  { en:"Shimla (Himachal Pradesh)", ta:"ஷிம்லா (இமாச்சலப் பிரதேசம்)", lat:31.1048, lon:77.1734, kind:"capital", r:60 },
+  { en:"Ranchi (Jharkhand)", ta:"ராஞ்சி (ஜார்கண்ட்)", lat:23.3441, lon:85.3096, kind:"capital", r:60 },
+  { en:"Bengaluru (Karnataka)", ta:"பெங்களூரு (கர்நாடகா)", lat:12.9716, lon:77.5946, kind:"capital", r:60 },
+  { en:"Thiruvananthapuram (Kerala)", ta:"திருவனந்தபுரம் (கேரளா)", lat:8.5241, lon:76.9366, kind:"capital", r:50 },
+  { en:"Bhopal (Madhya Pradesh)", ta:"போபால் (மத்தியப் பிரதேசம்)", lat:23.2599, lon:77.4126, kind:"capital", r:60 },
+  { en:"Mumbai (Maharashtra)", ta:"மும்பை (மகாராஷ்டிரா)", lat:19.0760, lon:72.8777, kind:"capital", r:50 },
+  { en:"Imphal (Manipur)", ta:"இம்பால் (மணிப்பூர்)", lat:24.8170, lon:93.9368, kind:"capital", r:60 },
+  { en:"Shillong (Meghalaya)", ta:"ஷில்லாங் (மேகாலயா)", lat:25.5788, lon:91.8933, kind:"capital", r:60 },
+  { en:"Aizawl (Mizoram)", ta:"ஐசால் (மிசோரம்)", lat:23.7271, lon:92.7176, kind:"capital", r:60 },
+  { en:"Kohima (Nagaland)", ta:"கொஹிமா (நாகாலாந்து)", lat:25.6751, lon:94.1086, kind:"capital", r:60 },
+  { en:"Bhubaneswar (Odisha)", ta:"புவனேஸ்வர் (ஒடிஸா)", lat:20.2961, lon:85.8245, kind:"capital", r:60 },
+  { en:"Chandigarh (Punjab)", ta:"சண்டிகர் (பஞ்சாப்)", lat:30.7333, lon:76.7794, kind:"capital", r:60 },
+  { en:"Jaipur (Rajasthan)", ta:"ஜெய்ப்பூர் (ராஜஸ்தான்)", lat:26.9124, lon:75.7873, kind:"capital", r:60 },
+  { en:"Gangtok (Sikkim)", ta:"காங்டாக் (சிக்கிம்)", lat:27.3389, lon:88.6065, kind:"capital", r:60 },
+  { en:"Chennai (Tamil Nadu)", ta:"சென்னை (தமிழ்நாடு)", lat:13.0827, lon:80.2707, kind:"capital", r:50 },
+  { en:"Hyderabad (Telangana)", ta:"ஹைதராபாத் (தெலங்கானா)", lat:17.3850, lon:78.4867, kind:"capital", r:60 },
+  { en:"Agartala (Tripura)", ta:"அகர்தலா (திரிபுரா)", lat:23.8315, lon:91.2868, kind:"capital", r:60 },
+  { en:"Lucknow (Uttar Pradesh)", ta:"லக்னோ (உத்தரப் பிரதேசம்)", lat:26.8467, lon:80.9462, kind:"capital", r:60 },
+  { en:"Dehradun (Uttarakhand)", ta:"தேராதூன் (உத்தரகாண்ட்)", lat:30.3165, lon:78.0322, kind:"capital", r:60 },
+  { en:"Kolkata (West Bengal)", ta:"கொல்கத்தா (மேற்கு வங்காளம்)", lat:22.5726, lon:88.3639, kind:"capital", r:60 },
 
-  // ---- Major physical features ----
-  { en:"Himalayas", ta:"இமயமலை", lat:30.0, lon:80.0, kind:'range', radiusKm:220 },
-  { en:"Indo-Gangetic Plain", ta:"கங்கை சமவெளி", lat:26.5, lon:82.5, kind:'plain', radiusKm:200 },
-  { en:"Deccan Plateau", ta:"டெக்கான் பீடபூமி", lat:17.0, lon:78.0, kind:'plateau', radiusKm:200 },
-  { en:"Western Ghats", ta:"மேற்குத் தொடர்ச்சி மலை", lat:14.0, lon:74.0, kind:'range', radiusKm:160 },
-  { en:"Eastern Ghats", ta:"கிழக்குத் தொடர்ச்சி மலை", lat:18.0, lon:83.0, kind:'range', radiusKm:160 },
-  { en:"Aravalli Range", ta:"அறாவல்லி மலைத் தொடர்", lat:25.5, lon:73.0, kind:'range', radiusKm:140 },
-  { en:"Vindhya Range", ta:"விந்த்ய மலைத் தொடர்", lat:24.0, lon:78.0, kind:'range', radiusKm:140 },
-  { en:"Satpura Range", ta:"சத்புரா மலைத் தொடர்", lat:22.5, lon:78.5, kind:'range', radiusKm:140 },
-  { en:"Thar Desert", ta:"தார் பாலைவனம்", lat:27.0, lon:71.0, kind:'desert', radiusKm:180 },
-  { en:"Rann of Kutch", ta:"கச்ச் உப்பு சமவெளி", lat:23.9, lon:69.2, kind:'region', radiusKm:150 },
-  { en:"Sunderbans", ta:"சுந்தர்பன்கள்", lat:21.9, lon:89.2, kind:'delta', radiusKm:120 },
-  { en:"Konkan Coast", ta:"கொங்கண் கடற்கரை", lat:16.8, lon:73.5, kind:'coast', radiusKm:160 },
-  { en:"Malabar Coast", ta:"மலபார் கடற்கரை", lat:10.5, lon:76.0, kind:'coast', radiusKm:160 },
-  { en:"Coromandel Coast", ta:"கொரோமண்டல் கடற்கரை", lat:12.0, lon:80.0, kind:'coast', radiusKm:160 },
-  { en:"Bay of Bengal", ta:"வங்காள விரிகுடா", lat:15.0, lon:88.0, kind:'sea', radiusKm:250 },
-  { en:"Arabian Sea", ta:"அரபிக்கடல்", lat:15.0, lon:68.0, kind:'sea', radiusKm:250 },
+  // Major features / regions
+  { en:"Himalayas", ta:"இமயமலை", lat:30.0, lon:80.0, kind:"range", r:220 },
+  { en:"Indo-Gangetic Plain", ta:"கங்கை சமவெளி", lat:26.5, lon:82.5, kind:"plain", r:200 },
+  { en:"Deccan Plateau", ta:"டெக்கான் பீடபூமி", lat:17.0, lon:78.0, kind:"plateau", r:200 },
+  { en:"Western Ghats", ta:"மேற்குத் தொடர்ச்சி மலை", lat:14.0, lon:74.0, kind:"range", r:160 },
+  { en:"Eastern Ghats", ta:"கிழக்குத் தொடர்ச்சி மலை", lat:18.0, lon:83.0, kind:"range", r:160 },
+  { en:"Aravalli Range", ta:"அறாவல்லி மலைத் தொடர்", lat:25.5, lon:73.0, kind:"range", r:140 },
+  { en:"Vindhya Range", ta:"விந்த்ய மலைத் தொடர்", lat:24.0, lon:78.0, kind:"range", r:140 },
+  { en:"Satpura Range", ta:"சத்புரா மலைத் தொடர்", lat:22.5, lon:78.5, kind:"range", r:140 },
+  { en:"Thar Desert", ta:"தார் பாலைவனம்", lat:27.0, lon:71.0, kind:"desert", r:180 },
+  { en:"Rann of Kutch", ta:"கச்ச் உப்பு சமவெளி", lat:23.9, lon:69.2, kind:"region", r:150 },
+  { en:"Sunderbans", ta:"சுந்தர்பன்கள்", lat:21.9, lon:89.2, kind:"delta", r:120 },
+  { en:"Konkan Coast", ta:"கொங்கண் கடற்கரை", lat:16.8, lon:73.5, kind:"coast", r:160 },
+  { en:"Malabar Coast", ta:"மலபார் கடற்கரை", lat:10.5, lon:76.0, kind:"coast", r:160 },
+  { en:"Coromandel Coast", ta:"கொரோமண்டல் கடற்கரை", lat:12.0, lon:80.0, kind:"coast", r:160 },
+  { en:"Bay of Bengal", ta:"வங்காள விரிகுடா", lat:15.0, lon:88.0, kind:"sea", r:250 },
+  { en:"Arabian Sea", ta:"அரபிக்கடல்", lat:15.0, lon:68.0, kind:"sea", r:250 },
 
-  // ---- Rivers (central points for quiz) ----
-  { en:"Ganga (Ganges) River", ta:"கங்கை நதி", lat:25.6, lon:83.0, kind:'river', radiusKm:150 },
-  { en:"Yamuna River", ta:"யமுனா நதி", lat:27.2, lon:77.6, kind:'river', radiusKm:120 },
-  { en:"Brahmaputra River", ta:"பிரம்மபுத்ரா நதி", lat:26.0, lon:92.0, kind:'river', radiusKm:180 },
-  { en:"Godavari River", ta:"கோதாவரி நதி", lat:18.6, lon:79.5, kind:'river', radiusKm:140 },
-  { en:"Krishna River", ta:"கிருஷ்ணா நதி", lat:16.6, lon:80.8, kind:'river', radiusKm:140 },
-  { en:"Narmada River", ta:"நர்மதா நதி", lat:22.6, lon:76.0, kind:'river', radiusKm:140 },
-  { en:"Tapti (Tapi) River", ta:"தாப்தி நதி", lat:21.2, lon:75.7, kind:'river', radiusKm:140 }
+  // Rivers (central points)
+  { en:"Ganga (Ganges) River", ta:"கங்கை நதி", lat:25.6, lon:83.0, kind:"river", r:150 },
+  { en:"Yamuna River", ta:"யமுனா நதி", lat:27.2, lon:77.6, kind:"river", r:120 },
+  { en:"Brahmaputra River", ta:"பிரம்மபுத்ரா நதி", lat:26.0, lon:92.0, kind:"river", r:180 },
+  { en:"Godavari River", ta:"கோதாவரி நதி", lat:18.6, lon:79.5, kind:"river", r:140 },
+  { en:"Krishna River", ta:"கிருஷ்ணா நதி", lat:16.6, lon:80.8, kind:"river", r:140 },
+  { en:"Narmada River", ta:"நர்மதா நதி", lat:22.6, lon:76.0, kind:"river", r:140 },
+  { en:"Tapti (Tapi) River", ta:"தாப்தி நதி", lat:21.2, lon:75.7, kind:"river", r:140 }
 ];
 
 /* =========================
    State
    ========================= */
-const HOF_KEY = 'locate_india_hof_v1'; // per language
-let currentRound = [];
+const HOF_KEY = 'locate_india_hof_v2';
+let round = [];
 let idx = 0;
 let score = 0;
-let marker = null;
+let revealMarker = null;
 let practiceLayer = null;
-let awaitingClick = false;
 
 /* =========================
    DOM
    ========================= */
 const startBtn = document.getElementById('startBtn');
-const msgEl = document.getElementById('msg');
 const scoreBox = document.getElementById('scoreBox');
 const scoreEl = document.getElementById('score');
 const outOfEl = document.getElementById('outOf');
 const qProgEl = document.getElementById('qProg');
 const hofList = document.getElementById('hofList');
+const msgEl = document.getElementById('msg');
 
 /* =========================
    Helpers
    ========================= */
-function getLang(){ return (document.querySelector('input[name="lang"]:checked')?.value)||'en'; }
-function getMode(){ return (document.querySelector('input[name="mode"]:checked')?.value)||'practice'; }
-function cityLabel(item, lang){ return item[lang] || item.en; }
-function sampleN(arr, n){
-  const c = arr.slice();
-  for(let i=c.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [c[i],c[j]]=[c[j],c[i]]; }
-  return c.slice(0,n);
+const getLang = ()=> (document.querySelector('input[name="lang"]:checked')?.value)||'en';
+const getMode = ()=> (document.querySelector('input[name="mode"]:checked')?.value)||'practice';
+const labelOf = (item, lang)=> item[lang] || item.en;
+function shufflePick(arr, n){
+  const a = arr.slice();
+  for(let i=a.length-1;i>0;i--){ const j = Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; }
+  return a.slice(0,n);
 }
-function clearPracticeLayer(){ if(practiceLayer){ map.removeLayer(practiceLayer); practiceLayer=null; } }
+function clearPracticeLayer(){
+  if(practiceLayer){ map.removeLayer(practiceLayer); practiceLayer = null; }
+}
 function showPracticeLabels(list, lang){
   clearPracticeLayer();
   practiceLayer = L.layerGroup();
   list.forEach(it=>{
-    const m = L.circleMarker([it.lat,it.lon], {radius:6,color:'#2563eb',fillColor:'#3b82f6',fillOpacity:0.85});
-    m.bindTooltip(cityLabel(it,lang), {permanent:true, direction:'right', offset:[6,0]});
+    const m = L.circleMarker([it.lat, it.lon], {radius:6, color:'#2563eb', fillColor:'#3b82f6', fillOpacity:.85});
+    m.bindTooltip(labelOf(it,lang), {permanent:true, direction:'right', offset:[6,0]});
     m.addTo(practiceLayer);
   });
   practiceLayer.addTo(map);
 }
 function updateScoreUI(show){
   scoreBox.style.display = show ? 'block' : 'none';
-  scoreEl.textContent = score;
-  outOfEl.textContent = currentRound.length || 10;
-  qProgEl.textContent = `Q ${Math.min(idx+1, currentRound.length)}/${currentRound.length}`;
+  scoreEl.textContent = String(score);
+  outOfEl.textContent = String(round.length || 10);
+  qProgEl.textContent = `Q ${Math.min(idx+1, round.length)}/${round.length}`;
 }
-function distKm(a, b){ return map.distance(a, b) / 1000; }
+function km(a, b){ return map.distance(a, b)/1000; }
 
 /* =========================
    Hall of Fame (Test only)
    ========================= */
 function loadHOF(){ try{ return JSON.parse(localStorage.getItem(HOF_KEY)||'[]'); }catch(_){ return []; } }
-function saveHOF(entry){ const list=loadHOF(); list.push(entry); localStorage.setItem(HOF_KEY, JSON.stringify(list)); }
+function saveHOF(entry){ const list = loadHOF(); list.push(entry); localStorage.setItem(HOF_KEY, JSON.stringify(list)); }
 function renderHOF(){
   const lang = getLang();
   const list = loadHOF().filter(x=>x.lang===lang).sort((a,b)=> b.score-a.score || a.date-b.date).slice(0,10);
   if(list.length===0){ hofList.innerHTML = '<div class="muted">No entries yet. Finish a Test to appear here.</div>'; return; }
   hofList.innerHTML = '';
   list.forEach((it,i)=>{
-    const d = new Date(it.date);
-    const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0'), yyyy=d.getFullYear();
-    const row = document.createElement('div');
-    row.className='hof-item';
+    const d=new Date(it.date); const dd=String(d.getDate()).padStart(2,'0'), mm=String(d.getMonth()+1).padStart(2,'0'), yyyy=d.getFullYear();
+    const row=document.createElement('div'); row.className='hof-item';
     row.innerHTML = `<div><b>${i+1}.</b> ${it.name||'Anonymous'} — <span class="pill">${it.score}/${it.total}</span></div>
                      <div class="muted">${(it.lang||'EN').toUpperCase()} • ${dd}/${mm}/${yyyy}</div>`;
     hofList.appendChild(row);
@@ -220,80 +222,79 @@ function renderHOF(){
 }
 
 /* =========================
-   Quiz flow
+   Game flow
    ========================= */
 function startRound(){
+  // reset state/UI
   msgEl.textContent = '';
-  currentRound = sampleN(itemsIN, 10);
-  idx = 0;
-  score = 0;
+  round = shufflePick(itemsIN, 10);
+  idx = 0; score = 0;
+  if(revealMarker){ map.removeLayer(revealMarker); revealMarker = null; }
   clearPracticeLayer();
-  if(marker){ map.removeLayer(marker); marker=null; }
 
   const lang = getLang();
   const mode = getMode();
 
-  if(mode === 'practice'){ updateScoreUI(false); showPracticeLabels(currentRound, lang); }
+  // practice: show labels; test: hide labels & show score box
+  if(mode === 'practice'){ updateScoreUI(false); showPracticeLabels(round, lang); }
   else { updateScoreUI(true); }
 
-  // Fly to first area & prompt
-  const first = currentRound[0];
-  map.setView([first.lat, first.lon], first.kind==='capital'?6:5);
-  alert(`${lang==='ta'?'கண்டுபிடி':'Locate'}: ${cityLabel(first, lang)}`);
+  // position to first item & prompt
+  const first = round[0];
+  map.setView([first.lat, first.lon], first.kind==='capital' ? 6 : 5);
+  alert(`${lang==='ta' ? 'கண்டுபிடி' : 'Locate'}: ${labelOf(first, lang)}`);
 
-  awaitingClick = true;
+  // set up one-off click handler
   map.once('click', onMapClick);
   renderHOF();
 }
 
-function onMapClick(e){
-  if(!awaitingClick) return;
-  const item = currentRound[idx];
+function onMapClick(ev){
+  const item = round[idx];
   const lang = getLang();
   const mode = getMode();
   const target = [item.lat, item.lon];
-  const dkm = distKm(e.latlng, target);
-  const threshold = item.radiusKm || 60;
+  const dist = km(ev.latlng, target);
+  const threshold = item.r || 60;
 
   if(mode === 'test'){
-    if(dkm <= threshold){ alert(`✅ ${lang==='ta'?'சரியாக உள்ளது':'Correct'}! (${dkm.toFixed(1)} km)`); score++; }
-    else { alert(`❌ ${lang==='ta'?'தவறு':'Incorrect'}. ${dkm.toFixed(1)} km away.`); }
-    scoreEl.textContent = score;
-  } else {
-    // practice: feedback only
-    if(dkm <= threshold){ alert(`👍 ${lang==='ta'?'நல்ல முயற்சி':'Good try'}! (${dkm.toFixed(1)} km)`); }
-    else { alert(`ℹ️ ${dkm.toFixed(1)} km away.`); }
+    if(dist <= threshold){ alert(`✅ ${lang==='ta'?'சரியானது':'Correct'} (${dist.toFixed(1)} km)`); score++; }
+    else { alert(`❌ ${lang==='ta'?'தவறு':'Incorrect'} — ${dist.toFixed(1)} km away`); }
+    scoreEl.textContent = String(score);
+  }else{
+    if(dist <= threshold){ alert(`👍 ${lang==='ta'?'நெருக்கமாக உள்ளது':'Good try'} (${dist.toFixed(1)} km)`); }
+    else { alert(`ℹ️ ${dist.toFixed(1)} km away`); }
   }
 
-  // Reveal true location
-  if(marker) map.removeLayer(marker);
-  marker = L.marker(target).addTo(map).bindPopup(cityLabel(item,lang)).openPopup();
+  // reveal true location marker (with localized label)
+  if(revealMarker) map.removeLayer(revealMarker);
+  revealMarker = L.marker(target).addTo(map).bindPopup(labelOf(item,lang)).openPopup();
 
-  // Next
   idx++;
-  if(idx < currentRound.length){
+  if(idx < round.length){
     updateScoreUI(getMode()==='test');
+    // next prompt
     setTimeout(()=>{
-      const next = currentRound[idx];
-      map.setView([next.lat, next.lon], next.kind==='capital'?6:5);
-      alert(`${lang==='ta'?'கண்டுபிடி':'Locate'}: ${cityLabel(next, lang)}`);
+      const nxt = round[idx];
+      map.setView([nxt.lat, nxt.lon], nxt.kind==='capital' ? 6 : 5);
+      alert(`${lang==='ta' ? 'கண்டுபிடி' : 'Locate'}: ${labelOf(nxt, lang)}`);
       map.once('click', onMapClick);
     }, 700);
-  } else {
-    // End
+  }else{
+    // round over
     updateScoreUI(getMode()==='test');
-    const total = currentRound.length;
     if(getMode()==='test'){
       setTimeout(()=>{
-        const promptText = (lang==='ta'
-          ? `🏁 தேர்வு முடிந்தது! உங்கள் மதிப்பெண்: ${score}/${total}\n\nHall of Fame-இல் பெயர் காட்ட வேண்டுமா?`
-          : `🏁 Test Over! Your score: ${score}/${total}\n\nEnter your name for the Hall of Fame (optional):`);
-        const name = prompt(promptText, '') || 'Anonymous';
-        saveHOF({ name, lang:getLang(), score, total, date:Date.now() });
+        const name = prompt(
+          lang==='ta'
+          ? `🏁 தேர்வு முடிந்தது! உங்கள் மதிப்பெண்: ${score}/${round.length}\n\nHall of Fame-இல் பெயர் (விரும்பினால்):`
+          : `🏁 Test Over! Your score: ${score}/${round.length}\n\nEnter your name for the Hall of Fame (optional):`
+        ) || 'Anonymous';
+        saveHOF({ name, lang:getLang(), score, total:round.length, date:Date.now() });
         renderHOF();
       }, 150);
-    } else {
-      alert(lang==='ta'?'✅ பயிற்சி முடிந்தது!':'✅ Practice round complete!');
+    }else{
+      alert(lang==='ta' ? '✅ பயிற்சி முடிந்தது!' : '✅ Practice round complete!');
     }
   }
 }
@@ -304,11 +305,11 @@ function onMapClick(e){
 startBtn.addEventListener('click', startRound);
 document.querySelectorAll('input[name="lang"]').forEach(el=> el.addEventListener('change', renderHOF));
 document.querySelectorAll('input[name="mode"]').forEach(el=> el.addEventListener('change', ()=>{
-  // Only toggles visibility of score chip mid-round; labels unchanged until restart
+  // mid-round toggle only changes the score chip visibility; labels update on next Start
   updateScoreUI(getMode()==='test');
 }));
 
-// initial leaderboard render
+// initial leaderboard
 renderHOF();
 </script>
 </body>
